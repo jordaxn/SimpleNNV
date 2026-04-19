@@ -1,0 +1,512 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Neural Network Visualizer</title>
+  <style>
+    :root {
+      --bg: #171327;
+      --fg: #f5f3fb;
+      --muted: rgba(245, 243, 251, 0.4);
+      --line: rgba(255, 255, 255, 0.1);
+      --line-strong: rgba(255, 255, 255, 0.4);
+      --accent: #a99cf5;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+      overflow: hidden;
+    }
+
+    canvas { display: block; }
+
+    .ui {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 2rem;
+    }
+    @media (min-width: 768px) { .ui { padding: 3rem; } }
+
+    header, .panel { pointer-events: auto; }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+
+    .eyebrow {
+      font-size: 10px;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    h1 {
+      margin: 0.5rem 0 0;
+      font-size: 1rem;
+      font-weight: 300;
+      letter-spacing: -0.01em;
+    }
+
+    .toggle {
+      background: none;
+      border: 0;
+      color: var(--muted);
+      font: inherit;
+      font-size: 10px;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+    .toggle:hover { color: var(--fg); }
+
+    .panel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.5rem;
+    }
+
+    .layers {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .icon-btn {
+      display: grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: transparent;
+      color: rgba(245, 243, 251, 0.6);
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s, opacity 0.2s;
+    }
+    .icon-btn:hover:not(:disabled) { border-color: var(--line-strong); color: var(--fg); }
+    .icon-btn:disabled { opacity: 0.2; cursor: not-allowed; }
+
+    .layer-list { display: flex; align-items: flex-end; gap: 0.5rem; }
+
+    .layer {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .stepper { display: flex; align-items: center; gap: 0.25rem; }
+
+    .step-btn {
+      width: 20px;
+      height: 20px;
+      display: grid;
+      place-items: center;
+      border: 0;
+      background: none;
+      color: rgba(245, 243, 251, 0.3);
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+    .step-btn:hover { color: var(--fg); }
+
+    .count {
+      width: 22px;
+      text-align: center;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 12px;
+    }
+
+    .rule { width: 40px; height: 1px; background: var(--line); }
+
+    .label {
+      font-size: 9px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: rgba(245, 243, 251, 0.3);
+    }
+
+    .actions { display: flex; gap: 0.75rem; align-items: center; }
+
+    .action {
+      position: relative;
+      padding: 0.5rem 1.5rem;
+      background: none;
+      border: 0;
+      color: rgba(245, 243, 251, 0.8);
+      font: inherit;
+      font-size: 10px;
+      letter-spacing: 0.35em;
+      text-transform: uppercase;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: color 0.2s;
+    }
+    .action::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      transition: border-color 0.2s;
+    }
+    .action:hover { color: var(--fg); }
+    .action.primary:hover::before { border-color: var(--accent); }
+    .action.secondary::before { border-color: rgba(255, 255, 255, 0.1); }
+    .action.secondary:hover::before { border-color: var(--line-strong); }
+    .action:disabled { opacity: 0.4; cursor: not-allowed; }
+    .action span { position: relative; }
+
+    .reset-icon {
+      position: relative;
+      width: 10px;
+      height: 10px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+    }
+
+    .vignette {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.6) 100%);
+    }
+
+    .grain {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.025;
+      mix-blend-mode: overlay;
+      background-image: radial-gradient(circle at 1px 1px, white 1px, transparent 0);
+      background-size: 3px 3px;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="scene"></canvas>
+
+  <div class="ui">
+    <header>
+      <div>
+        <div class="eyebrow">Visualizer / 001</div>
+        <h1>Neural Network</h1>
+      </div>
+      <button id="drift-toggle" class="toggle">Drift · on</button>
+    </header>
+
+    <div class="panel">
+      <div class="layers">
+        <button id="remove-layer" class="icon-btn" aria-label="Remove layer">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg>
+        </button>
+        <div id="layer-list" class="layer-list"></div>
+        <button id="add-layer" class="icon-btn" aria-label="Add layer">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+      </div>
+
+      <div class="actions">
+        <button id="run" class="action primary"><span>Forward pass →</span></button>
+        <button id="reset" class="action secondary">
+          <svg class="reset-icon" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5"/></svg>
+          <span>Reset</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="vignette"></div>
+  <div class="grain"></div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+    const DEFAULT_LAYERS = [3, 5, 5, 2];
+    const MIN_NEURONS = 1, MAX_NEURONS = 12;
+    const MIN_LAYERS = 2, MAX_LAYERS = 7;
+    const LAYER_GAP = 2.6, NEURON_GAP = 0.75;
+    const PULSE_MS = 1800, PULSE_HOLD = 400;
+    const NEURON_IDLE = new THREE.Color("#a99cf5");
+    const NEURON_HOT = new THREE.Color("#ffffff");
+    const EDGE_IDLE = new THREE.Color("#6b7adf");
+    const EDGE_HOT = new THREE.Color("#ffffff");
+
+    const state = {
+      layers: [...DEFAULT_LAYERS],
+      drift: true,
+      pulse: -1,
+      pulseStart: 0,
+    };
+
+    // Scene 
+    const canvas = document.getElementById("scene");
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color("#171327");
+
+    const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
+    camera.position.set(0, 0, 9);
+
+    const controls = new OrbitControls(camera, canvas);
+    controls.enablePan = false;
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.minDistance = 5;
+    controls.maxDistance = 22;
+
+    function resize() {
+      const w = window.innerWidth, h = window.innerHeight;
+      renderer.setSize(w, h, false);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    }
+    resize();
+    window.addEventListener("resize", resize);
+
+    // Network meshes
+    const root = new THREE.Group();
+    scene.add(root);
+
+    const neuronGeom = new THREE.OctahedronGeometry(0.18, 0);
+    const wireGeom = new THREE.WireframeGeometry(neuronGeom);
+
+    const neurons = []; // { mesh, wire, layer }
+    const edges = []; // { line, fromLayer, toLayer }
+    const tmpColor = new THREE.Color();
+
+    function rebuild() {
+      // dispose previous
+      for (const n of neurons) {
+        root.remove(n.group);
+        n.mesh.material.dispose();
+        n.wire.material.dispose();
+      }
+      for (const e of edges) {
+        root.remove(e.line);
+        e.line.geometry.dispose();
+        e.line.material.dispose();
+      }
+      neurons.length = 0;
+      edges.length = 0;
+
+      const totalW = (state.layers.length - 1) * LAYER_GAP;
+      const positions = state.layers.map((count, li) => {
+        const x = -totalW / 2 + li * LAYER_GAP;
+        const colH = (count - 1) * NEURON_GAP;
+        return Array.from({ length: count }, (_, ni) => {
+          const y = colH / 2 - ni * NEURON_GAP;
+          return new THREE.Vector3(x, y, 0);
+        });
+      });
+
+      // edges
+      for (let li = 0; li < positions.length - 1; li++) {
+        for (const from of positions[li]) {
+          for (const to of positions[li + 1]) {
+            const g = new THREE.BufferGeometry().setFromPoints([from, to]);
+            const m = new THREE.LineBasicMaterial({ color: EDGE_IDLE.clone(), transparent: true, opacity: 0.08 });
+            const line = new THREE.Line(g, m);
+            root.add(line);
+            edges.push({ line, fromLayer: li, toLayer: li + 1 });
+          }
+        }
+      }
+
+      // neurons
+      for (let li = 0; li < positions.length; li++) {
+        for (const p of positions[li]) {
+          const group = new THREE.Group();
+          group.position.copy(p);
+          const mesh = new THREE.Mesh(
+            neuronGeom,
+            new THREE.MeshBasicMaterial({ color: NEURON_IDLE.clone(), transparent: true, opacity: 0.08 }),
+          );
+          const wire = new THREE.LineSegments(
+            wireGeom,
+            new THREE.LineBasicMaterial({ color: NEURON_IDLE.clone(), transparent: true, opacity: 0.5 }),
+          );
+          group.add(mesh, wire);
+          root.add(group);
+          neurons.push({ group, mesh, wire, layer: li });
+        }
+      }
+    }
+
+    function layerActivation(li) {
+      if (state.pulse < 0) return 0;
+      const total = state.layers.length;
+      const center = li / Math.max(1, total - 1);
+      return Math.max(0, 1 - Math.abs(state.pulse - center) * total * 0.9);
+    }
+
+    // Animation loop
+    const clock = new THREE.Clock();
+    function tick() {
+      const elapsed = clock.getElapsedTime();
+
+      if (state.pulse >= 0) {
+        const t = (performance.now() - state.pulseStart) / PULSE_MS;
+        state.pulse = Math.min(1, t);
+        if (t >= 1 + PULSE_HOLD / PULSE_MS) state.pulse = -1;
+      }
+
+      if (state.drift) {
+        camera.position.set(
+          Math.sin(elapsed * 0.08) * 9,
+          Math.sin(elapsed * 0.05) * 0.6,
+          Math.cos(elapsed * 0.08) * 9,
+        );
+        camera.lookAt(0, 0, 0);
+      }
+
+      // neurons
+      for (const n of neurons) {
+        const a = layerActivation(n.layer);
+        const mm = n.mesh.material, wm = n.wire.material;
+        mm.opacity += (0.08 + a * 0.92 - mm.opacity) * 0.12;
+        wm.opacity += (0.5 + a * 0.5 - wm.opacity) * 0.12;
+        tmpColor.lerpColors(NEURON_IDLE, NEURON_HOT, a);
+        mm.color.copy(tmpColor);
+        wm.color.copy(tmpColor);
+        const target = 1 + a * 0.45;
+        const next = n.group.scale.x + (target - n.group.scale.x) * 0.12;
+        n.group.scale.setScalar(next);
+        n.group.rotation.set(elapsed * 0.09, elapsed * 0.15, 0);
+      }
+
+      // edges
+      for (const e of edges) {
+        const a = (layerActivation(e.fromLayer) + layerActivation(e.toLayer)) * 0.5;
+        const m = e.line.material;
+        m.opacity += (0.08 + a * 0.75 - m.opacity) * 0.12;
+        tmpColor.lerpColors(EDGE_IDLE, EDGE_HOT, a);
+        m.color.copy(tmpColor);
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+      requestAnimationFrame(tick);
+    }
+
+    // UI
+    const layerListEl = document.getElementById("layer-list");
+    const addBtn = document.getElementById("add-layer");
+    const removeBtn = document.getElementById("remove-layer");
+    const runBtn = document.getElementById("run");
+    const resetBtn = document.getElementById("reset");
+    const driftBtn = document.getElementById("drift-toggle");
+
+    function labelFor(i) {
+      if (i === 0) return "in";
+      if (i === state.layers.length - 1) return "out";
+      return `h${i}`;
+    }
+
+    function renderUI() {
+      layerListEl.innerHTML = "";
+      state.layers.forEach((n, i) => {
+        const wrap = document.createElement("div");
+        wrap.className = "layer";
+        wrap.innerHTML = `
+          <div class="stepper">
+            <button class="step-btn" data-action="dec" data-i="${i}">−</button>
+            <span class="count">${n}</span>
+            <button class="step-btn" data-action="inc" data-i="${i}">+</button>
+          </div>
+          <div class="rule"></div>
+          <div class="label">${labelFor(i)}</div>
+        `;
+        layerListEl.appendChild(wrap);
+      });
+
+      removeBtn.disabled = state.layers.length <= MIN_LAYERS;
+      addBtn.disabled = state.layers.length >= MAX_LAYERS;
+      runBtn.disabled = state.pulse >= 0;
+      runBtn.querySelector("span").textContent =
+        state.pulse >= 0 ? "· propagating ·" : "Forward pass →";
+      driftBtn.textContent = state.drift ? "Drift · on" : "Drift · off";
+    }
+
+    function setLayers(next) {
+      state.layers = next;
+      rebuild();
+      renderUI();
+    }
+
+    layerListEl.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-action]");
+      if (!btn) return;
+      const i = +btn.dataset.i;
+      const delta = btn.dataset.action === "inc" ? 1 : -1;
+      const next = [...state.layers];
+      next[i] = Math.max(MIN_NEURONS, Math.min(MAX_NEURONS, next[i] + delta));
+      setLayers(next);
+    });
+
+    addBtn.addEventListener("click", () => {
+      if (state.layers.length >= MAX_LAYERS) return;
+      const last = state.layers[state.layers.length - 1];
+      setLayers([...state.layers.slice(0, -1), 4, last]);
+    });
+
+    removeBtn.addEventListener("click", () => {
+      if (state.layers.length <= MIN_LAYERS) return;
+      const last = state.layers[state.layers.length - 1];
+      setLayers([...state.layers.slice(0, -2), last]);
+    });
+
+    runBtn.addEventListener("click", () => {
+      state.pulse = 0;
+      state.pulseStart = performance.now();
+      renderUI();
+      // re-enable after animation
+      setTimeout(renderUI, PULSE_MS + PULSE_HOLD);
+    });
+
+    resetBtn.addEventListener("click", () => {
+      state.pulse = -1;
+      setLayers([...DEFAULT_LAYERS]);
+    });
+
+    driftBtn.addEventListener("click", () => {
+      state.drift = !state.drift;
+      renderUI();
+    });
+
+    rebuild();
+    renderUI();
+    tick();
+  </script>
+</body>
+</html>
