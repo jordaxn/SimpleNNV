@@ -4,7 +4,7 @@ A sleek &amp; minimal neural network visualizer built with Three.js
 > [**See it in action!**](https://jordaxn.github.io/SimpleNNV/) `v1.0.0`
 
 # Overview
-Most neural network diagrams are static and flat. SimpleNNV maps abstract architectures into a playable 3D space, allowing you to visualize data flow and topology in real-time.
+Most neural network diagrams are static and flat. SimpleNNV maps abstract architectures into a playable 3D space, allowing you to visualize data flow and topology in real time.
 
 # Features
 Dynamic Topology – Add/remove hidden layers and scale neuron density (1–12) on the fly.
